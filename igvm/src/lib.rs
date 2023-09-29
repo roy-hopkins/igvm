@@ -9,7 +9,7 @@
 //! that this parser may not implement all the specified structure types or
 //! semantics defined in the IGVM file format.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 use hv_defs::HvArm64RegisterName;
 use hv_defs::HvX64RegisterName;
@@ -31,6 +31,7 @@ use thiserror::Error;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 
+pub mod c_api;
 pub mod hv_defs;
 pub mod page_table;
 mod parsing;
@@ -127,6 +128,14 @@ impl IgvmPlatformHeader {
         size_of::<IGVM_VHS_VARIABLE_HEADER>() + additional
     }
 
+    fn header_type(&self) -> IgvmVariableHeaderType {
+        match self {
+            IgvmPlatformHeader::SupportedPlatform(_) => {
+                IgvmVariableHeaderType::IGVM_VHT_SUPPORTED_PLATFORM
+            }
+        }
+    }
+
     /// Checks if this header contains valid state.
     fn validate(&self) -> Result<(), BinaryHeaderError> {
         match self {
@@ -195,6 +204,26 @@ impl IgvmPlatformHeader {
             Err(BinaryHeaderError::InvalidVariableHeaderType)
         }
     }
+
+    /// Write the binary representation of the header and any associated file
+    /// data to te supplied variable_headers and file data vectors.
+    /// file_data_offset points to the start of the data section to be encoded
+    /// in the variable header if this data has a file data component.
+    fn write_binary_header(&self, variable_headers: &mut Vec<u8>) -> Result<(), BinaryHeaderError> {
+        // Only serialize this header if valid.
+        self.validate()?;
+
+        match self {
+            IgvmPlatformHeader::SupportedPlatform(platform) => {
+                append_header(
+                    platform,
+                    IgvmVariableHeaderType::IGVM_VHT_SUPPORTED_PLATFORM,
+                    variable_headers,
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Represents a structure in an IGVM variable header section, initialization
@@ -243,6 +272,20 @@ impl IgvmInitializationHeader {
         };
 
         size_of::<IGVM_VHS_VARIABLE_HEADER>() + additional
+    }
+
+    fn header_type(&self) -> IgvmVariableHeaderType {
+        match self {
+            IgvmInitializationHeader::SnpPolicy { .. } => {
+                IgvmVariableHeaderType::IGVM_VHT_GUEST_POLICY
+            }
+            IgvmInitializationHeader::RelocatableRegion { .. } => {
+                IgvmVariableHeaderType::IGVM_VHT_RELOCATABLE_REGION
+            }
+            IgvmInitializationHeader::PageTableRelocationRegion { .. } => {
+                IgvmVariableHeaderType::IGVM_VHT_PAGE_TABLE_RELOCATION_REGION
+            }
+        }
     }
 
     /// Checks if this header contains valid state.
@@ -833,6 +876,42 @@ impl IgvmDirectiveHeader {
         };
 
         align_8(size_of::<IGVM_VHS_VARIABLE_HEADER>() + additional)
+    }
+
+    fn header_type(&self) -> IgvmVariableHeaderType {
+        match self {
+            IgvmDirectiveHeader::PageData { .. } => IgvmVariableHeaderType::IGVM_VHT_PAGE_DATA,
+            IgvmDirectiveHeader::ParameterArea { .. } => {
+                IgvmVariableHeaderType::IGVM_VHT_PARAMETER_AREA
+            }
+            IgvmDirectiveHeader::VpCount(_) => IgvmVariableHeaderType::IGVM_VHT_VP_COUNT_PARAMETER,
+            IgvmDirectiveHeader::Srat(_) => IgvmVariableHeaderType::IGVM_VHT_SRAT,
+            IgvmDirectiveHeader::Madt(_) => IgvmVariableHeaderType::IGVM_VHT_MADT,
+            IgvmDirectiveHeader::Slit(_) => IgvmVariableHeaderType::IGVM_VHT_SLIT,
+            IgvmDirectiveHeader::Pptt(_) => IgvmVariableHeaderType::IGVM_VHT_PPTT,
+            IgvmDirectiveHeader::MmioRanges(_) => IgvmVariableHeaderType::IGVM_VHT_MMIO_RANGES,
+            IgvmDirectiveHeader::MemoryMap(_) => IgvmVariableHeaderType::IGVM_VHT_MEMORY_MAP,
+            IgvmDirectiveHeader::CommandLine(_) => IgvmVariableHeaderType::IGVM_VHT_COMMAND_LINE,
+            IgvmDirectiveHeader::DeviceTree(_) => IgvmVariableHeaderType::IGVM_VHT_DEVICE_TREE,
+            IgvmDirectiveHeader::RequiredMemory { .. } => {
+                IgvmVariableHeaderType::IGVM_VHT_REQUIRED_MEMORY
+            }
+            IgvmDirectiveHeader::SnpVpContext { .. } => IgvmVariableHeaderType::IGVM_VHT_VP_CONTEXT,
+            IgvmDirectiveHeader::X64VbsVpContext { .. } => {
+                IgvmVariableHeaderType::IGVM_VHT_VP_CONTEXT
+            }
+            IgvmDirectiveHeader::AArch64VbsVpContext { .. } => {
+                IgvmVariableHeaderType::IGVM_VHT_VP_CONTEXT
+            }
+            IgvmDirectiveHeader::ParameterInsert(_) => {
+                IgvmVariableHeaderType::IGVM_VHT_PARAMETER_INSERT
+            }
+            IgvmDirectiveHeader::ErrorRange { .. } => IgvmVariableHeaderType::IGVM_VHT_ERROR_RANGE,
+            IgvmDirectiveHeader::SnpIdBlock { .. } => IgvmVariableHeaderType::IGVM_VHT_SNP_ID_BLOCK,
+            IgvmDirectiveHeader::VbsMeasurement { .. } => {
+                IgvmVariableHeaderType::IGVM_VHT_VBS_MEASUREMENT
+            }
+        }
     }
 
     /// Write the binary representation of the header and any associated file

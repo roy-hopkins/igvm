@@ -12,3 +12,6 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# Header file generated for the C API by igvm_c/Makefile
+igvm_c/include/igvm.h
