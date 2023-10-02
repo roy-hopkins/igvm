@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "include/igvm.h"
+#include "../include/igvm.h"
 #include "dump.h"
 
 static char *section_name[] = { "platform", "initialization", "directive" };
@@ -37,5 +37,8 @@ int main(void)
 			}
 		}
 	}
+
+	igvmfile_free(igvm);
+	
 	return 0;
 }

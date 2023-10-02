@@ -73,6 +73,19 @@ pub unsafe extern "C" fn igvmfile_new_from_binary(
     }
 }
 
+/// Free a handle that was created with this library.
+///
+/// # Safety
+/// This function is exported and designed to be called as a C API. As such
+/// it works with raw pointers and is inherently unsafe due to this.
+#[no_mangle]
+pub unsafe extern "C" fn igvmfile_free(igvm: *mut IgvmFile) {
+    // Safety: Using structure provided as a raw pointer from C
+    unsafe {
+        drop(Box::from_raw(igvm));
+    };
+}
+
 /// Get the count of headers for a particular section in the parsed IGVM
 /// file.
 ///

@@ -106,11 +106,9 @@ use static_assertions::const_assert_eq;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 
-#[cfg(feature = "igvm-c")]
-pub mod c_api;
-
 pub mod dt;
 
+/// cbindgen:ignore
 #[allow(non_camel_case_types)]
 mod packed_nums {
     pub type u32_le = zerocopy::U32<zerocopy::LittleEndian>;
