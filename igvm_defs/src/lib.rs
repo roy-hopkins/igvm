@@ -106,7 +106,9 @@ use static_assertions::const_assert_eq;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 
+#[cfg(feature = "igvm-c")]
 pub mod c_api;
+
 pub mod dt;
 
 #[allow(non_camel_case_types)]

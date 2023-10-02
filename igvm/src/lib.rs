@@ -31,7 +31,9 @@ use thiserror::Error;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 
+#[cfg(feature = "igvm-c")]
 pub mod c_api;
+
 pub mod hv_defs;
 pub mod page_table;
 mod parsing;
@@ -128,6 +130,7 @@ impl IgvmPlatformHeader {
         size_of::<IGVM_VHS_VARIABLE_HEADER>() + additional
     }
 
+    #[cfg(feature = "igvm-c")]
     fn header_type(&self) -> IgvmVariableHeaderType {
         match self {
             IgvmPlatformHeader::SupportedPlatform(_) => {
@@ -209,6 +212,7 @@ impl IgvmPlatformHeader {
     /// data to te supplied variable_headers and file data vectors.
     /// file_data_offset points to the start of the data section to be encoded
     /// in the variable header if this data has a file data component.
+    #[cfg(feature = "igvm-c")]
     fn write_binary_header(&self, variable_headers: &mut Vec<u8>) -> Result<(), BinaryHeaderError> {
         // Only serialize this header if valid.
         self.validate()?;
@@ -274,6 +278,7 @@ impl IgvmInitializationHeader {
         size_of::<IGVM_VHS_VARIABLE_HEADER>() + additional
     }
 
+    #[cfg(feature = "igvm-c")]
     fn header_type(&self) -> IgvmVariableHeaderType {
         match self {
             IgvmInitializationHeader::SnpPolicy { .. } => {
@@ -878,6 +883,7 @@ impl IgvmDirectiveHeader {
         align_8(size_of::<IGVM_VHS_VARIABLE_HEADER>() + additional)
     }
 
+    #[cfg(feature = "igvm-c")]
     fn header_type(&self) -> IgvmVariableHeaderType {
         match self {
             IgvmDirectiveHeader::PageData { .. } => IgvmVariableHeaderType::IGVM_VHT_PAGE_DATA,

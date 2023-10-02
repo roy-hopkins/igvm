@@ -24,6 +24,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = []
 unstable = [] # For types that are not yet stabilized in an official version
+igvm-c = [] # Add exports that allow the library to be used from C
 
 [dependencies]
 bitfield-struct.workspace = true
