@@ -417,11 +417,15 @@ pub extern "C" fn igvm_get_header_data(
                     let mut file_data = Vec::<u8>::new();
                     let _result =
                         header.write_binary_header(0, &mut Vec::<u8>::new(), &mut file_data);
-                    // SAFETY: The fetching and update of the global variable is safe because
-                    // it is using an Atomic type.
-                    let handle = unsafe { IGVM_HANDLE_FACTORY.fetch_add(1, Ordering::Relaxed) };
-                    igvm.buffers.insert(handle, file_data);
-                    handle
+                    if !file_data.is_empty() {
+                        // SAFETY: The fetching and update of the global variable is safe because
+                        // it is using an Atomic type.
+                        let handle = unsafe { IGVM_HANDLE_FACTORY.fetch_add(1, Ordering::Relaxed) };
+                        igvm.buffers.insert(handle, file_data);
+                        handle
+                    } else {
+                        IgvmApiError::IGVMAPI_NO_DATA.0
+                    }
                 } else {
                     IgvmApiError::IGVMAPI_NO_DATA.0
                 }
