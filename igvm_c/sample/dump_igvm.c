@@ -1,13 +1,20 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-//
-// Copyright (c) 2023 SUSE LLC
-//
-// Author: Roy Hopkins <rhopkins@suse.de>
-
-#include "include/igvm.h"
+/* 
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ *
+ * Copyright (c) 2023 SUSE LLC
+ *
+ * Author: Roy Hopkins <rhopkins@suse.de>
+*/
 #include <stdio.h>
+#include <string.h>
+#include <limits.h>
+#include "../include/igvm.h"
 
-void hexdump(const void* data, size_t size, int columns, int address) {
+static char* filename = NULL;
+static int hex_context = INT_MAX;
+static char *section_name[] = { "platform", "initialization", "directive" };
+
+static void hexdump(const void* data, size_t size, int columns, int address) {
     int rows = (size + (columns - 1)) / columns;
     int row;
     int col;
@@ -96,13 +103,14 @@ static void igvm_dump_parameter(IGVM_VHS_PARAMETER *param)
 	printf("\n");
 }
 
-void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header)
+static void igvm_dump_variable_header(IGVM_VHS_VARIABLE_HEADER *header)
 {
-	printf("%s:\n", igvm_type_to_text(typ));
-	switch (typ) {
+	void* vh_data = (uint8_t *)header + sizeof(IGVM_VHS_VARIABLE_HEADER);
+	printf("%s:\n", igvm_type_to_text(header->typ));
+	switch (header->typ) {
 	case IGVM_VHT_SUPPORTED_PLATFORM: {
 		IGVM_VHS_SUPPORTED_PLATFORM *vhs =
-			(IGVM_VHS_SUPPORTED_PLATFORM *)header;
+			(IGVM_VHS_SUPPORTED_PLATFORM *)vh_data;
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  HighestVtl: %02X\n", vhs->highest_vtl);
 		printf("  PlatformType: %02X\n", vhs->platform_type);
@@ -111,7 +119,7 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 		break;
 	}
 	case IGVM_VHT_GUEST_POLICY: {
-		IGVM_VHS_GUEST_POLICY *vhs = (IGVM_VHS_GUEST_POLICY *)header;
+		IGVM_VHS_GUEST_POLICY *vhs = (IGVM_VHS_GUEST_POLICY *)vh_data;
 		printf("  Policy: %016lX\n", vhs->policy);
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  Reserved: %08X\n", vhs->reserved);
@@ -119,7 +127,7 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 	}
 	case IGVM_VHT_RELOCATABLE_REGION: {
 		IGVM_VHS_RELOCATABLE_REGION *vhs =
-			(IGVM_VHS_RELOCATABLE_REGION *)header;
+			(IGVM_VHS_RELOCATABLE_REGION *)vh_data;
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  VpIndex: %04X\n", vhs->vp_index);
 		printf("  VTL: %02X\n", vhs->vtl);
@@ -138,7 +146,7 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 	}
 	case IGVM_VHT_PAGE_TABLE_RELOCATION_REGION: {
 		IGVM_VHS_PAGE_TABLE_RELOCATION *vhs =
-			(IGVM_VHS_PAGE_TABLE_RELOCATION *)header;
+			(IGVM_VHS_PAGE_TABLE_RELOCATION *)vh_data;
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  VpIndex: %04X\n", vhs->vp_index);
 		printf("  VTL: %02X\n", vhs->vtl);
@@ -150,7 +158,7 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 	}
 	case IGVM_VHT_PARAMETER_AREA: {
 		IGVM_VHS_PARAMETER_AREA *vhs =
-			(IGVM_VHS_PARAMETER_AREA *)header;
+			(IGVM_VHS_PARAMETER_AREA *)vh_data;
 		printf("  NumberOfBytes: %016lX\n", vhs->number_of_bytes);
 		printf("  ParameterAreaIndex: %08X\n",
 		       vhs->parameter_area_index);
@@ -158,7 +166,7 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 		break;
 	}
 	case IGVM_VHT_PAGE_DATA: {
-		IGVM_VHS_PAGE_DATA *vhs = (IGVM_VHS_PAGE_DATA *)header;
+		IGVM_VHS_PAGE_DATA *vhs = (IGVM_VHS_PAGE_DATA *)vh_data;
 		printf("  GPA: %016lX\n", vhs->gpa);
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  FileOffset: %08X\n", vhs->file_offset);
@@ -168,7 +176,7 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 	}
 	case IGVM_VHT_PARAMETER_INSERT: {
 		IGVM_VHS_PARAMETER_INSERT *vhs =
-			(IGVM_VHS_PARAMETER_INSERT *)header;
+			(IGVM_VHS_PARAMETER_INSERT *)vh_data;
 		printf("  GPA: %016lX\n", vhs->gpa);
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  ParameterAreaIndex: %08X\n",
@@ -176,7 +184,7 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 		break;
 	}
 	case IGVM_VHT_VP_CONTEXT: {
-		IGVM_VHS_VP_CONTEXT *vhs = (IGVM_VHS_VP_CONTEXT *)header;
+		IGVM_VHS_VP_CONTEXT *vhs = (IGVM_VHS_VP_CONTEXT *)vh_data;
 		printf("  GPA: %016lX\n", vhs->gpa);
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  FileOffset: %08X\n", vhs->file_offset);
@@ -186,7 +194,7 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 	}
 	case IGVM_VHT_REQUIRED_MEMORY: {
 		IGVM_VHS_REQUIRED_MEMORY *vhs =
-			(IGVM_VHS_REQUIRED_MEMORY *)header;
+			(IGVM_VHS_REQUIRED_MEMORY *)vh_data;
 		printf("  GPA: %016lX\n", vhs->gpa);
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  NumberOfBytes: %08X\n", vhs->number_of_bytes);
@@ -202,12 +210,12 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 	case IGVM_VHT_COMMAND_LINE:
 	case IGVM_VHT_SLIT:
 	case IGVM_VHT_PPTT: {
-		IGVM_VHS_PARAMETER *vhs = (IGVM_VHS_PARAMETER *)header;
+		IGVM_VHS_PARAMETER *vhs = (IGVM_VHS_PARAMETER *)vh_data;
 		igvm_dump_parameter(vhs);
 		break;
 	}
 	case IGVM_VHT_SNP_ID_BLOCK: {
-		IGVM_VHS_SNP_ID_BLOCK *vhs = (IGVM_VHS_SNP_ID_BLOCK *)header;
+		IGVM_VHS_SNP_ID_BLOCK *vhs = (IGVM_VHS_SNP_ID_BLOCK *)vh_data;
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  AuthorKeyEnabled: %02X\n", vhs->author_key_enabled);
 		printf("  Reserved: %02X%02X%02X\n", vhs->reserved[0],
@@ -227,7 +235,7 @@ void igvm_dump_variable_header(IgvmVariableHeaderType typ, const uint8_t *header
 	}
 	case IGVM_VHT_ERROR_RANGE: {
 		IGVM_VHS_ERROR_RANGE *vhs =
-			(IGVM_VHS_ERROR_RANGE *)header;
+			(IGVM_VHS_ERROR_RANGE *)vh_data;
 		printf("  GPA: %016lX\n", vhs->gpa);
 		printf("  CompatibilityMask: %08X\n", vhs->compatibility_mask);
 		printf("  SizeBytes: %08X\n", vhs->size_bytes);
@@ -250,4 +258,143 @@ static void igvm_dump_fixed_header(IGVM_FIXED_HEADER *header)
 	printf("  TotalFileSize: 0x%08X\n", header->total_file_size);
 	printf("  Checksum: 0x%08X\n", header->checksum);
 	printf("\n");
+}
+
+static int dump_igvm(uint8_t* igvm_buf, unsigned long igvm_length)
+{
+	IgvmFile *igvm = NULL;
+	if (igvm_new_from_binary(igvm_buf, igvm_length, &igvm) != IGVMAPI_OK) {
+		printf("Failed to parse IGVM file\n");
+		return 1;
+	}
+
+	for (long section = 0; section <= HEADER_SECTION_DIRECTIVE; ++section) {
+		long count = igvm_header_count(igvm, (IgvmHeaderSection)section);
+		printf("----------------------------------------------------------\n"
+		       "%s count = %ld\n\n",
+		       section_name[section], count);
+		
+		for (long i = 0; i < count; ++i) {
+			IgvmVariableHeaderType typ = 0;
+			if (igvm_get_header_type(igvm, section, i, &typ) == IGVMAPI_OK) {
+				uint8_t *header_buf;
+				uint32_t header_length = 0;
+				uint8_t *filedata_buf;
+				uint32_t filedata_length = 0;
+				int ret;
+
+				/* Allocate a buffer for the header and dump the header data */
+				if (igvm_get_header(igvm, section, i, NULL, &header_length) != IGVMAPI_BUFFER_TOO_SMALL) {
+					printf("Invalid header (%ld)\n", i);
+					return 1;
+				}
+				header_buf = (uint8_t *)malloc(header_length);
+				if (!header_buf) {
+					printf("Could not allocate %u bytes for header %ld\n", header_length, i);
+					return 1;
+				}
+				if (igvm_get_header(igvm, section, i, header_buf, &header_length) != IGVMAPI_OK) {
+					free(header_buf);
+					printf("Invalid header (%ld)\n", i);
+					return 1;
+				}
+				igvm_dump_variable_header((IGVM_VHS_VARIABLE_HEADER*)header_buf);
+				free(header_buf);
+
+				/* Do the same for any associated file data */
+				ret = igvm_get_header_data(igvm, section, i, NULL, &filedata_length);
+				if (ret == IGVMAPI_BUFFER_TOO_SMALL) {
+					filedata_buf = (uint8_t *)malloc(filedata_length);
+					if (!filedata_buf) {
+						printf("Could not allocate %u bytes for file data %ld\n", filedata_length, i);
+						return 1;
+					}
+					if (igvm_get_header_data(igvm, section, i, filedata_buf, &filedata_length) != IGVMAPI_OK) {
+						free(filedata_buf);
+						printf("Invalid file data (%ld)\n", i);
+						return 1;
+					}
+					printf("Got %u bytes of file data:\n", filedata_length);
+					hexdump(filedata_buf, (filedata_length > hex_context) ? hex_context : filedata_length, 32, 0);
+					free(filedata_buf);
+				}
+			}
+		}
+	}
+
+	igvm_free(igvm);
+	return 0;
+}
+
+static int parse_args(int argc, char **argv) {
+	int i;
+	for (i = 1; i < argc; ++i) {
+		if (argv[i][0] != '-') {
+			if (filename != NULL) {
+				printf("Invalid command line\n");
+				return 1;
+			}
+			filename = argv[i];
+		}
+		else if (strcmp(argv[i], "--hex") == 0 || strcmp(argv[i], "-h") == 0) {
+			if ((i + 1) == argc) {
+				printf("Value missing for --hex\n");
+				return 1;
+			}
+			++i;
+			hex_context = atoi(argv[i]);
+		}
+		else {
+			printf("Invalid argument: %s\n", argv[i]);
+			return 1;
+		}
+	}
+	if (!filename) {
+		printf("Filename not provided\n");
+		return 1;
+	}
+	return 0;
+}
+
+int main(int argc, char **argv) {
+	FILE *fp;
+	unsigned long length;
+	uint8_t *igvm_buf = NULL;
+	int ret;
+
+	if (parse_args(argc, argv)) {
+		printf("Usage: dump_igvm [--hex|-h bytes] igvm_file\n");
+		printf("       --hex bytes specifies how many bytes of "
+			   "each file data section to dump as hex. Defaults "
+			   "to dumping the entire section.\n");
+		return 1;
+	}
+
+	fp = fopen(filename, "rb");
+	if (!fp) {
+		printf("Could not open file\n");
+		return 1;
+	}
+	fseek(fp, 0, SEEK_END);
+	length = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+
+	igvm_buf = (uint8_t *)malloc(length);
+	if (!igvm_buf) {
+		fclose(fp);
+		printf("Could not allocate buffer to read file\n");
+		return 1;
+	}
+	if (fread(igvm_buf, 1, length, fp) != length) {
+		fclose(fp);
+		free(igvm_buf);
+		printf("Failed to read file\n");
+		return 1;
+	}
+	fclose(fp);
+
+	ret = dump_igvm(igvm_buf, length);
+
+	free(igvm_buf);	
+	return ret;
 }

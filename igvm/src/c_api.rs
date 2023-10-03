@@ -5,7 +5,7 @@
 // Author: Roy Hopkins <rhopkins@suse.de>
 #![allow(unsafe_code)]
 
-use crate::IgvmFile;
+use crate::{Error, IgvmFile};
 use igvm_defs::IgvmVariableHeaderType;
 use open_enum::open_enum;
 
@@ -18,7 +18,29 @@ pub enum IgvmApiError {
     IGVMAPI_BUFFER_TOO_SMALL,
     IGVMAPI_NO_DATA,
     IGVMAPI_INVALID_FILE,
-    IGVMAPI_MEMORY_ERROR,
+    IGVMAPI_NO_PLATFORM_HEADERS,
+    IGVMAPI_FILE_DATA_SECTION_TOO_LARGE,
+    IGVMAPI_VARIABLE_HEADER_SECTION_TOO_LARGE,
+    IGVMAPI_TOTAL_FILE_SIZE_TOO_LARGE,
+    IGVMAPI_INVALID_BINARY_PLATFORM_HEADER,
+    IGVMAPI_INVALID_BINARY_INITIALIZATION_HEADER,
+    IGVMAPI_INVALID_BINARY_DIRECTIVE_HEADER,
+    IGVMAPI_MULTIPLE_PLATFORM_HEADERS_WITH_SAME_ISOLATION,
+    IGVMAPI_INVALID_PARAMETER_AREA_INDEX,
+    IGVMAPI_INVALID_PLATFORM_TYPE,
+    IGVMAPI_NO_FREE_COMPATIBILITY_MASKS,
+    IGVMAPI_INVALID_FIXED_HEADER,
+    IGVMAPI_INVALID_BINARY_VARIABLE_HEADER_SECTION,
+    IGVMAPI_INVALID_CHECKSUM,
+    IGVMAPI_MULTIPLE_PAGE_TABLE_RELOCATION_HEADERS,
+    IGVMAPI_RELOCATION_REGIONS_OVERLAP,
+    IGVMAPI_PARAMETER_INSERT_INSIDE_PAGE_TABLE_REGION,
+    IGVMAPI_NO_MATCHING_VP_CONTEXT,
+    IGVMAPI_PLATFORM_ARCH_UNSUPPORTED,
+    IGVMAPI_INVALID_HEADER_ARCH,
+    IGVMAPI_UNSUPPORTED_PAGE_SIZE,
+    IGVMAPI_INVALID_FIXED_HEADER_ARCH,
+    IGVMAPI_MERGE_REVISION,
 }
 
 #[open_enum]
@@ -28,6 +50,59 @@ pub enum IgvmHeaderSection {
     HEADER_SECTION_PLATFORM,
     HEADER_SECTION_INITIALIZATION,
     HEADER_SECTION_DIRECTIVE,
+}
+
+fn translate_error(error: Error) -> IgvmApiError {
+    match error {
+        Error::NoPlatformHeaders => IgvmApiError::IGVMAPI_NO_PLATFORM_HEADERS,
+        Error::FileDataSectionTooLarge => IgvmApiError::IGVMAPI_FILE_DATA_SECTION_TOO_LARGE,
+        Error::VariableHeaderSectionTooLarge => {
+            IgvmApiError::IGVMAPI_VARIABLE_HEADER_SECTION_TOO_LARGE
+        }
+        Error::TotalFileSizeTooLarge => IgvmApiError::IGVMAPI_TOTAL_FILE_SIZE_TOO_LARGE,
+        Error::InvalidBinaryPlatformHeader(_) => {
+            IgvmApiError::IGVMAPI_INVALID_BINARY_PLATFORM_HEADER
+        }
+        Error::InvalidBinaryInitializationHeader(_) => {
+            IgvmApiError::IGVMAPI_INVALID_BINARY_INITIALIZATION_HEADER
+        }
+        Error::InvalidBinaryDirectiveHeader(_) => {
+            IgvmApiError::IGVMAPI_INVALID_BINARY_DIRECTIVE_HEADER
+        }
+        Error::MultiplePlatformHeadersWithSameIsolation => {
+            IgvmApiError::IGVMAPI_MULTIPLE_PLATFORM_HEADERS_WITH_SAME_ISOLATION
+        }
+        Error::InvalidParameterAreaIndex => IgvmApiError::IGVMAPI_INVALID_PARAMETER_AREA_INDEX,
+        Error::InvalidPlatformType => IgvmApiError::IGVMAPI_INVALID_PLATFORM_TYPE,
+        Error::NoFreeCompatibilityMasks => IgvmApiError::IGVMAPI_NO_FREE_COMPATIBILITY_MASKS,
+        Error::InvalidFixedHeader => IgvmApiError::IGVMAPI_INVALID_FIXED_HEADER,
+        Error::InvalidBinaryVariableHeaderSection => {
+            IgvmApiError::IGVMAPI_INVALID_BINARY_VARIABLE_HEADER_SECTION
+        }
+        Error::InvalidChecksum {
+            expected: _,
+            header_value: _,
+        } => IgvmApiError::IGVMAPI_INVALID_CHECKSUM,
+        Error::MultiplePageTableRelocationHeaders => {
+            IgvmApiError::IGVMAPI_MULTIPLE_PAGE_TABLE_RELOCATION_HEADERS
+        }
+        Error::RelocationRegionsOverlap => IgvmApiError::IGVMAPI_RELOCATION_REGIONS_OVERLAP,
+        Error::ParameterInsertInsidePageTableRegion => {
+            IgvmApiError::IGVMAPI_PARAMETER_INSERT_INSIDE_PAGE_TABLE_REGION
+        }
+        Error::NoMatchingVpContext => IgvmApiError::IGVMAPI_NO_MATCHING_VP_CONTEXT,
+        Error::PlatformArchUnsupported {
+            arch: _,
+            platform: _,
+        } => IgvmApiError::IGVMAPI_PLATFORM_ARCH_UNSUPPORTED,
+        Error::InvalidHeaderArch {
+            arch: _,
+            header_type: _,
+        } => IgvmApiError::IGVMAPI_INVALID_HEADER_ARCH,
+        Error::UnsupportedPageSize(_) => IgvmApiError::IGVMAPI_UNSUPPORTED_PAGE_SIZE,
+        Error::InvalidFixedHeaderArch(_) => IgvmApiError::IGVMAPI_INVALID_FIXED_HEADER_ARCH,
+        Error::MergeRevision => IgvmApiError::IGVMAPI_MERGE_REVISION,
+    }
 }
 
 fn copy_header_data(src: &Vec<u8>, dst: *mut u8, dst_len: *mut u32) -> IgvmApiError {
@@ -47,13 +122,13 @@ fn copy_header_data(src: &Vec<u8>, dst: *mut u8, dst_len: *mut u32) -> IgvmApiEr
 /// Parse a binary array containing an IGVM file.
 /// The contents of the file are validated and, if valid, a handle is returned
 /// to represent the file. This handle must be freed with a call to
-/// igvmfile_free().
+/// igvm_free().
 ///
 /// # Safety
 /// This function is exported and designed to be called as a C API. As such
 /// it works with raw pointers and is inherently unsafe due to this.
 #[no_mangle]
-pub unsafe extern "C" fn igvmfile_new_from_binary(
+pub unsafe extern "C" fn igvm_new_from_binary(
     data: *const u8,
     len: u32,
     igvm: *mut *mut IgvmFile,
@@ -62,14 +137,15 @@ pub unsafe extern "C" fn igvmfile_new_from_binary(
     let file_data = unsafe { std::slice::from_raw_parts(data, len as usize) };
     let result = IgvmFile::new_from_binary(file_data, None);
 
-    if let Ok(file) = result {
-        // Safety: Dereferences the C-provided pointer
-        unsafe {
-            *igvm = Box::into_raw(Box::new(file));
+    match result {
+        Ok(file) => {
+            // Safety: Dereferences the C-provided pointer
+            unsafe {
+                *igvm = Box::into_raw(Box::new(file));
+            }
+            IgvmApiError::IGVMAPI_OK
         }
-        IgvmApiError::IGVMAPI_OK
-    } else {
-        IgvmApiError::IGVMAPI_MEMORY_ERROR
+        Err(e) => translate_error(e),
     }
 }
 
@@ -79,7 +155,7 @@ pub unsafe extern "C" fn igvmfile_new_from_binary(
 /// This function is exported and designed to be called as a C API. As such
 /// it works with raw pointers and is inherently unsafe due to this.
 #[no_mangle]
-pub unsafe extern "C" fn igvmfile_free(igvm: *mut IgvmFile) {
+pub unsafe extern "C" fn igvm_free(igvm: *mut IgvmFile) {
     // Safety: Using structure provided as a raw pointer from C
     unsafe {
         drop(Box::from_raw(igvm));
@@ -93,10 +169,7 @@ pub unsafe extern "C" fn igvmfile_free(igvm: *mut IgvmFile) {
 /// This function is exported and designed to be called as a C API. As such
 /// it works with raw pointers and is inherently unsafe due to this.
 #[no_mangle]
-pub unsafe extern "C" fn igvmfile_header_count(
-    igvm: *mut IgvmFile,
-    section: IgvmHeaderSection,
-) -> u32 {
+pub unsafe extern "C" fn igvm_header_count(igvm: *mut IgvmFile, section: IgvmHeaderSection) -> u32 {
     // Safety: Using pointer from C
     unsafe {
         let len = match section {
@@ -115,13 +188,13 @@ pub unsafe extern "C" fn igvmfile_header_count(
 /// section in the parsed IGVM file.
 ///
 /// This function can be called to determine which IGVM_VHS_* structure will
-/// be returned by a call to igvmfile_get_header().
+/// be returned by a call to igvm_get_header().
 ///
 /// # Safety
 /// This function is exported and designed to be called as a C API. As such
 /// it works with raw pointers and is inherently unsafe due to this.
 #[no_mangle]
-pub unsafe extern "C" fn igvmfile_get_header_type(
+pub unsafe extern "C" fn igvm_get_header_type(
     igvm: *mut IgvmFile,
     section: IgvmHeaderSection,
     index: u32,
@@ -164,7 +237,7 @@ pub unsafe extern "C" fn igvmfile_get_header_type(
 ///
 /// The caller must allocate a buffer that is large enough to hold the
 /// entire header. The header type can be determined by calling
-/// igvmfile_get_header_type.
+/// igvm_get_header_type.
 ///
 /// On entry, buf_len must be set to the actual size of the buffer pointed
 /// to by buf. On return, buf_len is updated to the actual length.
@@ -177,7 +250,7 @@ pub unsafe extern "C" fn igvmfile_get_header_type(
 /// This function is exported and designed to be called as a C API. As such
 /// it works with raw pointers and is inherently unsafe due to this.
 #[no_mangle]
-pub unsafe extern "C" fn igvmfile_get_header(
+pub unsafe extern "C" fn igvm_get_header(
     igvm: *mut IgvmFile,
     section: IgvmHeaderSection,
     index: u32,
@@ -258,7 +331,7 @@ pub unsafe extern "C" fn igvmfile_get_header(
 /// This function is exported and designed to be called as a C API. As such
 /// it works with raw pointers and is inherently unsafe due to this.
 #[no_mangle]
-pub unsafe extern "C" fn igvmfile_get_header_data(
+pub unsafe extern "C" fn igvm_get_header_data(
     igvm: *mut IgvmFile,
     section: IgvmHeaderSection,
     index: u32,
@@ -277,12 +350,13 @@ pub unsafe extern "C" fn igvmfile_get_header_data(
                         header.write_binary_header(0, &mut Vec::<u8>::new(), &mut file_data);
 
                     if file_data.len() > *buf_len as usize {
+                        *buf_len = file_data.len() as u32;
                         return IgvmApiError::IGVMAPI_BUFFER_TOO_SMALL;
+                    } else if !file_data.is_empty() {
+                        core::ptr::copy(file_data.as_ptr(), buf, file_data.len());
+                        *buf_len = file_data.len() as u32;
+                        return IgvmApiError::IGVMAPI_OK;
                     }
-
-                    core::ptr::copy(file_data.as_ptr(), buf, file_data.len());
-                    *buf_len = file_data.len() as u32;
-                    return IgvmApiError::IGVMAPI_OK;
                 }
             }
             _ => (),

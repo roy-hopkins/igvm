@@ -14,7 +14,7 @@ categories = ["virtualization", "parser-implementations"]
 
 [lib]
 name = "igvm"
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 igvm_defs = { workspace = true, features = ["unstable"] }
