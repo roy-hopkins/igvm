@@ -24,8 +24,8 @@ fn new_platform(compatibility_mask: u32, platform_type: IgvmPlatformType) -> Igv
     })
 }
 
-fn new_snp_policy(policy: u64, compatibility_mask: u32) -> IgvmInitializationHeader {
-    IgvmInitializationHeader::SnpPolicy {
+fn new_guest_policy(policy: u64, compatibility_mask: u32) -> IgvmInitializationHeader {
+    IgvmInitializationHeader::GuestPolicy {
         policy,
         compatibility_mask,
     }
@@ -72,7 +72,7 @@ fn create_basic(filename: &String) {
     let file = IgvmFile::new(
         IgvmRevision::V1,
         vec![new_platform(0x1, IgvmPlatformType::VSM_ISOLATION)],
-        vec![new_snp_policy(0x30000, 1), new_snp_policy(0x30000, 2)],
+        vec![new_guest_policy(0x30000, 1), new_guest_policy(0x30000, 2)],
         vec![
             new_page_data(0, 1, &data1),
             new_page_data(1, 1, &data2),
