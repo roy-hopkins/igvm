@@ -230,7 +230,7 @@ pub enum IgvmArchitecture {
 #[repr(u32)]
 pub enum IgvmVariableHeaderType {
     /// Invalid.
-    INVALID = 0x0,
+    IGVM_VHT_INVALID = 0x0,
     // These are IGVM_VHT_RANGE_PLATFORM structures.
     /// A supported platform structure described by
     /// [`IGVM_VHS_SUPPORTED_PLATFORM`].

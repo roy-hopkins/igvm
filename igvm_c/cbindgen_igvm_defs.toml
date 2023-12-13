@@ -36,6 +36,12 @@ typedef struct {
 	uint32_t reserved : 31;
 } RequiredMemoryFlags;
 
+typedef struct {
+	uint16_t is_shared : 1;
+    uint16_t reserved : 15;
+} MemoryMapEntryFlags;
+
+
 typedef uint64_t u64_le;
 typedef uint32_t u32_le;
 
@@ -66,6 +72,7 @@ include = ["IGVM_FIXED_HEADER",
 	"IGVM_VHS_SNP_ID_BLOCK", 
 	"IGVM_VHS_VBS_MEASUREMENT", 
 	"IGVM_VHS_MEMORY_MAP_ENTRY", 
-	"IGVM_VHS_ERROR_RANGE"]
+	"IGVM_VHS_ERROR_RANGE",
+	"IgvmMemoryState"]
 
-exclude = ["IgvmPageDataFlags", "RequiredMemoryFlags"]
+exclude = ["IgvmPageDataFlags", "RequiredMemoryFlags", "MemoryMapEntryFlags"]
