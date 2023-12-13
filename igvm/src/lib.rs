@@ -609,6 +609,7 @@ pub enum IgvmDirectiveHeader {
     Pptt(IGVM_VHS_PARAMETER),
     MmioRanges(IGVM_VHS_PARAMETER),
     MemoryMap(IGVM_VHS_PARAMETER),
+    MemoryState(IGVM_VHS_PARAMETER),
     CommandLine(IGVM_VHS_PARAMETER),
     DeviceTree(IGVM_VHS_PARAMETER),
     RequiredMemory {
@@ -869,6 +870,7 @@ impl IgvmDirectiveHeader {
             IgvmDirectiveHeader::Pptt(param) => size_of_val(param),
             IgvmDirectiveHeader::MmioRanges(param) => size_of_val(param),
             IgvmDirectiveHeader::MemoryMap(param) => size_of_val(param),
+            IgvmDirectiveHeader::MemoryState(param) => size_of_val(param),
             IgvmDirectiveHeader::CommandLine(param) => size_of_val(param),
             IgvmDirectiveHeader::DeviceTree(param) => size_of_val(param),
             IgvmDirectiveHeader::RequiredMemory { .. } => size_of::<IGVM_VHS_REQUIRED_MEMORY>(),
@@ -898,6 +900,9 @@ impl IgvmDirectiveHeader {
             IgvmDirectiveHeader::Pptt(_) => IgvmVariableHeaderType::IGVM_VHT_PPTT,
             IgvmDirectiveHeader::MmioRanges(_) => IgvmVariableHeaderType::IGVM_VHT_MMIO_RANGES,
             IgvmDirectiveHeader::MemoryMap(_) => IgvmVariableHeaderType::IGVM_VHT_MEMORY_MAP,
+            IgvmDirectiveHeader::MemoryState(_) => {
+                IgvmVariableHeaderType::IGVM_VHT_MEMORY_STATE_PARAMETER
+            }
             IgvmDirectiveHeader::CommandLine(_) => IgvmVariableHeaderType::IGVM_VHT_COMMAND_LINE,
             IgvmDirectiveHeader::DeviceTree(_) => IgvmVariableHeaderType::IGVM_VHT_DEVICE_TREE,
             IgvmDirectiveHeader::RequiredMemory { .. } => {
@@ -1055,6 +1060,13 @@ impl IgvmDirectiveHeader {
                 append_header(
                     param,
                     IgvmVariableHeaderType::IGVM_VHT_MEMORY_MAP,
+                    variable_headers,
+                );
+            }
+            IgvmDirectiveHeader::MemoryState(param) => {
+                append_header(
+                    param,
+                    IgvmVariableHeaderType::IGVM_VHT_MEMORY_STATE_PARAMETER,
                     variable_headers,
                 );
             }
@@ -1266,6 +1278,7 @@ impl IgvmDirectiveHeader {
             Pptt(_) => None,
             MmioRanges(_) => None,
             MemoryMap(_) => None,
+            MemoryState(_) => None,
             CommandLine(_) => None,
             DeviceTree(_) => None,
             RequiredMemory {
@@ -1310,6 +1323,7 @@ impl IgvmDirectiveHeader {
             Pptt(_) => None,
             MmioRanges(_) => None,
             MemoryMap(_) => None,
+            MemoryState(_) => None,
             CommandLine(_) => None,
             DeviceTree(_) => None,
             RequiredMemory {
@@ -1438,6 +1452,7 @@ impl IgvmDirectiveHeader {
             | IgvmDirectiveHeader::Pptt(_)
             | IgvmDirectiveHeader::MmioRanges(_)
             | IgvmDirectiveHeader::MemoryMap(_)
+            | IgvmDirectiveHeader::MemoryState(_)
             | IgvmDirectiveHeader::CommandLine(_)
             | IgvmDirectiveHeader::DeviceTree(_) => {}
             IgvmDirectiveHeader::RequiredMemory {
@@ -1809,6 +1824,11 @@ impl IgvmDirectiveHeader {
                 if length == size_of::<IGVM_VHS_PARAMETER>() =>
             {
                 IgvmDirectiveHeader::MemoryMap(read_header(&mut variable_headers)?)
+            }
+            IgvmVariableHeaderType::IGVM_VHT_MEMORY_STATE_PARAMETER
+                if length == size_of::<IGVM_VHS_PARAMETER>() =>
+            {
+                IgvmDirectiveHeader::MemoryState(read_header(&mut variable_headers)?)
             }
             IgvmVariableHeaderType::IGVM_VHT_ERROR_RANGE
                 if length == size_of::<IGVM_VHS_ERROR_RANGE>() =>
@@ -2339,6 +2359,7 @@ impl IgvmFile {
                 | IgvmDirectiveHeader::Pptt(info)
                 | IgvmDirectiveHeader::MmioRanges(info)
                 | IgvmDirectiveHeader::MemoryMap(info)
+                | IgvmDirectiveHeader::MemoryState(info)
                 | IgvmDirectiveHeader::CommandLine(info)
                 | IgvmDirectiveHeader::DeviceTree(info) => {
                     match parameter_areas.get(&info.parameter_area_index) {
@@ -3088,7 +3109,8 @@ impl IgvmFile {
                     }
                 }
                 VpCount(info) | Srat(info) | Madt(info) | Slit(info) | Pptt(info)
-                | MmioRanges(info) | MemoryMap(info) | CommandLine(info) | DeviceTree(info) => {
+                | MmioRanges(info) | MemoryMap(info) | MemoryState(info) | CommandLine(info)
+                | DeviceTree(info) => {
                     fixup_parameter_index(
                         &mut info.parameter_area_index,
                         &fixup_parameter_index_map,
@@ -4024,6 +4046,11 @@ mod tests {
     test_igvm_parameter!(test_memory_map(
         IgvmDirectiveHeader::MemoryMap,
         IgvmVariableHeaderType::IGVM_VHT_MEMORY_MAP
+    ));
+
+    test_igvm_parameter!(test_memory_state(
+        IgvmDirectiveHeader::MemoryState,
+        IgvmVariableHeaderType::IGVM_VHT_MEMORY_STATE_PARAMETER
     ));
 
     test_igvm_parameter!(test_command_line(
